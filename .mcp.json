@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "anki-connect-mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/home/sbeck/code/mcps/anki-connect-mcp",
+        "anki-connect-mcp"
+      ],
+      "env": {
+        "ANKI_CONNECT_URL": "${ANKI_CONNECT_URL:-http://localhost:8765}",
+        "ANKI_CONNECT_VERSION": "${ANKI_CONNECT_VERSION:-6}",
+        "DEFAULT_DECK": "${DEFAULT_DECK:-Default}",
+        "GENERATION_MODE": "${GENERATION_MODE:-hybrid}",
+        "VALIDATION_STRICTNESS": "${VALIDATION_STRICTNESS:-moderate}",
+        "MAX_ANSWER_WORDS": "${MAX_ANSWER_WORDS:-50}",
+        "EXTRACTION_TIMEOUT": "${EXTRACTION_TIMEOUT:-60}",
+        "DATABASE_PATH": "${DATABASE_PATH:-~/.anki_mcp.db}"
+      }
+    }
+  }
+}
