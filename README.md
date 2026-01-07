@@ -266,6 +266,107 @@ Session #4 [MANUAL]
   Date: 2026-01-04 08:45:00
 ```
 
+## HTML Formatting
+
+All card fields support **full HTML formatting**. You can use HTML directly or use the convenient helper functions from the `formatting` module.
+
+### Direct HTML Usage
+
+```python
+# Chemical formulas with subscripts
+create_basic_card(
+    front="What is the formula for water?",
+    back="H<sub>2</sub>O",
+    deck="Chemistry"
+)
+
+# Lists
+create_basic_card(
+    front="What are the states of matter?",
+    back="<ul><li>Solid</li><li>Liquid</li><li>Gas</li></ul>",
+    deck="Physics"
+)
+
+# Colors and styling
+create_basic_card(
+    front="What color is a stop sign?",
+    back='<span style="color: red; font-weight: bold;">Red</span>',
+    deck="Driving"
+)
+
+# Cloze cards with HTML
+create_cloze_card(
+    text="Water has the formula {{c1::H<sub>2</sub>O}}.",
+    deck="Chemistry"
+)
+```
+
+### Using Helper Functions
+
+```python
+from anki_connect_mcp.formatting import (
+    bold, italic, color, subscript, superscript,
+    unordered_list, ordered_list, code
+)
+
+# Text formatting
+create_basic_card(
+    front="What is photosynthesis?",
+    back=f"{bold('Definition:')} The process by which plants convert light energy",
+    deck="Biology"
+)
+
+# Chemical notation
+create_basic_card(
+    front="What is the formula for sulfuric acid?",
+    back=f"H{subscript('2')}SO{subscript('4')}",
+    deck="Chemistry"
+)
+
+# Math notation
+create_basic_card(
+    front="What is the Pythagorean theorem?",
+    back=f"a{superscript('2')} + b{superscript('2')} = c{superscript('2')}",
+    deck="Math"
+)
+
+# Lists
+steps = unordered_list(["Step 1", "Step 2", "Step 3"])
+create_basic_card(
+    front="What are the steps?",
+    back=steps,
+    deck="Procedures"
+)
+```
+
+### Available Helper Functions
+
+- **Text styling:** `bold()`, `italic()`, `underline()`, `color()`, `highlight()`
+- **Scientific notation:** `subscript()`, `superscript()`
+- **Lists:** `unordered_list()`, `ordered_list()`
+- **Code:** `code()` (inline and block)
+- **Tables:** `table()`
+- **Math:** `mathjax_inline()`, `mathjax_block()` (LaTeX support)
+- **Layout:** `line_break()`, `div()`
+- **Utilities:** `strip_html()`, `get_text_length()`
+
+### HTML-Aware Validation
+
+The validation system automatically strips HTML when counting characters and words, so markup doesn't affect length limits:
+
+```python
+# This passes validation (counts as 5 chars, not including <b></b>)
+create_basic_card(
+    front="<b>Short</b>",
+    back="Answer",
+    deck="Test"
+)
+```
+
+### Complete Guide
+
+For detailed examples and best practices, see [docs/HTML_FORMATTING.md](docs/HTML_FORMATTING.md).
+
 ## Configuration
 
 Environment variables (set in `.env`):
@@ -330,6 +431,8 @@ Set `validate=false` to bypass validation (not recommended).
 **Implemented:**
 - ✅ Basic card creation (basic, cloze, type-in)
 - ✅ Quality validation (6 rules)
+- ✅ HTML formatting support (direct and helper functions)
+- ✅ HTML-aware validation (strips tags when counting length)
 - ✅ History tracking (DuckDB)
 - ✅ Singleton patterns (AnkiConnect client, database)
 - ✅ CallToolResult error handling (2026 best practices)

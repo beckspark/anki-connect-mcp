@@ -195,8 +195,8 @@ async def get_deck_stats(deck_name: str) -> CallToolResult:
         stats = await client.get_deck_stats(deck_name)
 
         # Extract stats from the response
-        # AnkiConnect returns a dict with the deck name as key
-        deck_stats = stats.get(deck_name, {})
+        # AnkiConnect returns a dict with deck ID as key (single-item dict when querying one deck)
+        deck_stats = next(iter(stats.values()), {})
 
         if not deck_stats:
             return CallToolResult(

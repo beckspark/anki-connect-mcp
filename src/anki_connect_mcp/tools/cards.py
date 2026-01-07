@@ -23,9 +23,18 @@ async def create_basic_card(
     Creates a traditional flashcard with a question/prompt on the front and answer on the back.
     Automatically validates against spaced repetition best practices unless disabled.
 
+    **HTML Formatting:** Both front and back fields support full HTML formatting. You can use:
+    - Basic formatting: `<b>bold</b>`, `<i>italic</i>`, `<u>underline</u>`
+    - Colors: `<span style="color: red;">text</span>`
+    - Lists: `<ul><li>item</li></ul>` or `<ol><li>item</li></ol>`
+    - Line breaks: `<br>`
+    - Any other standard HTML tags
+
+    For convenience, use the formatting module helpers or pass HTML directly as strings.
+
     Args:
-        front: Question or prompt text (max 1000 chars)
-        back: Answer text (max 2000 chars)
+        front: Question or prompt text (max 1000 chars visible text, HTML tags not counted)
+        back: Answer text (max 2000 chars visible text, HTML tags not counted)
         deck: Deck name (uses default if not specified). Supports hierarchy with ::
               (e.g., "Biology::Cells")
         tags: List of tags to apply to the card
@@ -34,12 +43,27 @@ async def create_basic_card(
     Returns:
         Success message with note ID and any validation warnings, or error message
 
-    Example:
+    Examples:
+        Basic usage:
         >>> create_basic_card(
         ...     front="What is the capital of France?",
         ...     back="Paris",
         ...     deck="Geography::Europe",
         ...     tags=["capitals", "europe"]
+        ... )
+
+        With HTML formatting:
+        >>> create_basic_card(
+        ...     front="What is the chemical formula for <b>water</b>?",
+        ...     back="H<sub>2</sub>O",
+        ...     deck="Chemistry::Basics"
+        ... )
+
+        With complex formatting:
+        >>> create_basic_card(
+        ...     front="What are the three states of matter?",
+        ...     back="<ul><li>Solid</li><li>Liquid</li><li>Gas</li></ul>",
+        ...     deck="Physics::Fundamentals"
         ... )
     """
     try:
@@ -142,22 +166,39 @@ async def create_cloze_card(
     Cloze deletions are fill-in-the-blank style cards. Research shows they're more effective
     for factual learning than basic cards. Use {{c1::text}} format for deletions.
 
+    **HTML Formatting:** Cloze cards support full HTML formatting both inside and outside
+    cloze deletions. You can combine cloze syntax with HTML tags seamlessly.
+
     Args:
         text: Text with cloze deletions. Format: {{c1::answer}} or {{c1::answer::hint}}
-              Use c1, c2, c3, etc. for multiple deletions
+              Use c1, c2, c3, etc. for multiple deletions. HTML tags are supported.
         deck: Deck name (uses default if not specified)
         tags: List of tags to apply to the card
-        extra: Additional context or hints shown on all cards
+        extra: Additional context or hints shown on all cards (supports HTML)
         validate: Whether to run quality validation (default: True)
 
     Returns:
         Success message with note ID and any validation warnings, or error message
 
-    Example:
+    Examples:
+        Basic cloze:
         >>> create_cloze_card(
         ...     text="The {{c1::mitochondria}} is the {{c2::powerhouse}} of the cell.",
         ...     deck="Biology::Cells",
         ...     tags=["cellular_biology", "organelles"]
+        ... )
+
+        With HTML formatting:
+        >>> create_cloze_card(
+        ...     text="Water has the formula {{c1::H<sub>2</sub>O}}.",
+        ...     deck="Chemistry::Molecules"
+        ... )
+
+        With hints and formatting:
+        >>> create_cloze_card(
+        ...     text="The {{c1::pythagorean theorem::a<sup>2</sup> + b<sup>2</sup>}} states that a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>.",
+        ...     extra="<i>Named after the Greek mathematician Pythagoras</i>",
+        ...     deck="Math::Geometry"
         ... )
     """
     try:
@@ -267,9 +308,13 @@ async def create_type_in_card(
     Type-in cards require typing the exact answer, testing recall more rigorously than
     basic cards. Best for learning precise terms, spellings, or short definitions.
 
+    **HTML Formatting:** The front field supports full HTML formatting. The back field
+    (typed answer) should typically be plain text since it's used for exact matching,
+    but HTML is supported if needed.
+
     Args:
-        front: Question or prompt text
-        back: Expected typed answer (must match exactly)
+        front: Question or prompt text (supports HTML)
+        back: Expected typed answer (must match exactly - typically plain text)
         deck: Deck name (uses default if not specified)
         tags: List of tags to apply to the card
         validate: Whether to run quality validation (default: True)
@@ -277,11 +322,19 @@ async def create_type_in_card(
     Returns:
         Success message with note ID and any validation warnings, or error message
 
-    Example:
+    Examples:
+        Basic usage:
         >>> create_type_in_card(
         ...     front="Chemical symbol for gold",
         ...     back="Au",
         ...     deck="Chemistry::Elements"
+        ... )
+
+        With HTML formatting:
+        >>> create_type_in_card(
+        ...     front="Type the name of this compound: H<sub>2</sub>SO<sub>4</sub>",
+        ...     back="sulfuric acid",
+        ...     deck="Chemistry::Nomenclature"
         ... )
     """
     try:
@@ -347,6 +400,106 @@ async def create_type_in_card(
 
         if suggestions:
             msg += "\n\nSuggestions:\n" + "\n".join(f"- {s.message}" for s in suggestions)
+
+        return CallToolResult(content=[TextContent(type="text", text=msg)])
+
+    except AnkiConnectionError as e:
+        return CallToolResult(
+            isError=True,
+            content=[
+                TextContent(
+                    type="text",
+                    text=(
+                        "Failed to connect to Anki. "
+                        "Is Anki running with AnkiConnect installed?\n\n"
+                        f"Error: {str(e)}"
+                    ),
+                )
+            ],
+        )
+    except Exception as e:
+        return CallToolResult(
+            isError=True,
+            content=[TextContent(type="text", text=f"Unexpected error: {str(e)}")],
+        )
+
+
+@app.tool()
+async def update_card_tags(
+    note_id: int,
+    tags_to_add: list[str] | None = None,
+    tags_to_remove: list[str] | None = None,
+) -> CallToolResult:
+    """Update tags on an existing Anki note.
+
+    Allows adding new tags and/or removing existing tags from a note.
+    At least one of tags_to_add or tags_to_remove must be provided.
+
+    Args:
+        note_id: The Anki note ID to update
+        tags_to_add: List of tags to add to the note
+        tags_to_remove: List of tags to remove from the note
+
+    Returns:
+        Success message with current tags, or error message
+
+    Examples:
+        Add tags only:
+        >>> update_card_tags(
+        ...     note_id=1767644643572,
+        ...     tags_to_add=["course_01", "important"]
+        ... )
+
+        Remove tags only:
+        >>> update_card_tags(
+        ...     note_id=1767644643572,
+        ...     tags_to_remove=["old_tag"]
+        ... )
+
+        Add and remove tags:
+        >>> update_card_tags(
+        ...     note_id=1767644643572,
+        ...     tags_to_add=["course_01", "module_02"],
+        ...     tags_to_remove=["deprecated"]
+        ... )
+    """
+    try:
+        # Validate inputs
+        if not tags_to_add and not tags_to_remove:
+            return CallToolResult(
+                isError=True,
+                content=[
+                    TextContent(
+                        type="text",
+                        text="At least one of tags_to_add or tags_to_remove must be provided.",
+                    )
+                ],
+            )
+
+        client = get_anki_client()
+
+        # Add tags if requested
+        if tags_to_add:
+            tags_str = " ".join(tags_to_add)
+            await client.add_tags([note_id], tags_str)
+
+        # Remove tags if requested
+        if tags_to_remove:
+            tags_str = " ".join(tags_to_remove)
+            await client.remove_tags([note_id], tags_str)
+
+        # Get updated tags
+        updated_tags = await client.get_note_tags(note_id)
+
+        # Build response message
+        msg = f"Tags updated successfully for note ID {note_id}\n\n"
+
+        if tags_to_add:
+            msg += f"Added tags: {', '.join(tags_to_add)}\n"
+        if tags_to_remove:
+            msg += f"Removed tags: {', '.join(tags_to_remove)}\n"
+
+        msg += f"\nCurrent tags: {', '.join(updated_tags) if updated_tags else '(no tags)'}"
 
         return CallToolResult(content=[TextContent(type="text", text=msg)])
 

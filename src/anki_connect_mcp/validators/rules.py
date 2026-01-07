@@ -3,6 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 
+from ..formatting import get_text_length, strip_html
 from ..models import BasicCard, ClozeCard, TypeInCard, ValidationResult, ValidationSeverity
 
 
@@ -37,7 +38,9 @@ class AnswerLengthRule(ValidationRule):
         # Get max words based on strictness
         max_words = {"strict": 30, "moderate": 50, "lenient": 100}[strictness]
 
-        word_count = len(card.back.split())
+        # Count words in plain text (excluding HTML tags)
+        plain_text = strip_html(card.back)
+        word_count = len(plain_text.split())
         if word_count > max_words:
             return [
                 ValidationResult(
@@ -77,7 +80,8 @@ class MinimumInformationRule(ValidationRule):
             return []
 
         # For basic/type-in cards, look for multiple questions or lists
-        front = card.front.lower()
+        # Strip HTML to check actual content
+        front = strip_html(card.front).lower()
         triggers = [
             ("list", "enumerate"),  # List prompts
             ("and", ","),  # Multiple items
@@ -117,8 +121,8 @@ class AmbiguityRule(ValidationRule):
         if isinstance(card, ClozeCard):
             return []  # Cloze cards are inherently specific
 
-        # Check for vague question patterns
-        front_lower = card.front.lower()
+        # Check for vague question patterns (strip HTML first)
+        front_lower = strip_html(card.front).lower()
         vague_patterns = [
             "what about",
             "tell me about",
@@ -143,7 +147,8 @@ class AmbiguityRule(ValidationRule):
                 ]
 
         # Check if question is too short (might be incomplete)
-        if len(card.front.strip()) < 10:
+        # Use plain text length to exclude HTML tags
+        if get_text_length(card.front) < 10:
             return [
                 ValidationResult(
                     severity=ValidationSeverity.SUGGESTION,
@@ -240,7 +245,9 @@ class ContextRule(ValidationRule):
         """Check for sufficient context."""
         if isinstance(card, ClozeCard):
             # For cloze cards, check if text is too short
-            if len(card.text.replace("{{", "").replace("}}", "").strip()) < 20:
+            # Strip both HTML and cloze syntax
+            plain_text = strip_html(card.text.replace("{{", "").replace("}}", ""))
+            if len(plain_text.strip()) < 20:
                 return [
                     ValidationResult(
                         severity=ValidationSeverity.SUGGESTION,
@@ -255,7 +262,8 @@ class ContextRule(ValidationRule):
             return []
 
         # For basic cards, check if front is a bare word (no context)
-        if len(card.front.split()) <= 2 and "?" not in card.front:
+        plain_front = strip_html(card.front)
+        if len(plain_front.split()) <= 2 and "?" not in plain_front:
             return [
                 ValidationResult(
                     severity=ValidationSeverity.SUGGESTION,

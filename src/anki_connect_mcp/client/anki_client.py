@@ -261,6 +261,67 @@ class AnkiClient:
         """
         return await self.invoke("cardsInfo", {"cards": card_ids})
 
+    # Tag operations
+    async def add_tags(self, note_ids: list[int], tags: str) -> None:
+        """Add tags to notes.
+
+        Args:
+            note_ids: List of note IDs to add tags to
+            tags: Space-separated string of tags to add
+
+        Raises:
+            AnkiConnectionError: Connection failed
+        """
+        await self.invoke("addTags", {"notes": note_ids, "tags": tags})
+
+    async def remove_tags(self, note_ids: list[int], tags: str) -> None:
+        """Remove tags from notes.
+
+        Args:
+            note_ids: List of note IDs to remove tags from
+            tags: Space-separated string of tags to remove
+
+        Raises:
+            AnkiConnectionError: Connection failed
+        """
+        await self.invoke("removeTags", {"notes": note_ids, "tags": tags})
+
+    async def replace_tags(
+        self, note_ids: list[int], tag_to_replace: str, replace_with: str
+    ) -> None:
+        """Replace tags in notes.
+
+        Args:
+            note_ids: List of note IDs to modify
+            tag_to_replace: Tag to replace
+            replace_with: Tag to replace with
+
+        Raises:
+            AnkiConnectionError: Connection failed
+        """
+        await self.invoke(
+            "replaceTags",
+            {"notes": note_ids, "tag_to_replace": tag_to_replace, "replace_with_tag": replace_with},
+        )
+
+    async def get_note_tags(self, note_id: int) -> list[str]:
+        """Get tags for a note.
+
+        Args:
+            note_id: Note ID
+
+        Returns:
+            List of tags
+
+        Raises:
+            AnkiConnectionError: Connection failed
+        """
+        # Note: AnkiConnect returns tags as part of notesInfo
+        info = await self.notes_info([note_id])
+        if info:
+            return info[0].get("tags", [])
+        return []
+
 
 # Singleton instance
 _client: AnkiClient | None = None
