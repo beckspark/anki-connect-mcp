@@ -106,9 +106,7 @@ class RecommendationEngine:
 
         # Recommendation 3: Improve tag consistency
         if report.deck_patterns.tag_consistency < 0.5:
-            untagged_estimate = int(
-                report.total_cards * (1 - report.deck_patterns.tag_consistency)
-            )
+            untagged_estimate = int(report.total_cards * (1 - report.deck_patterns.tag_consistency))
             recs.append(
                 Recommendation(
                     title=f"Add tags to {untagged_estimate} untagged cards",
@@ -131,7 +129,10 @@ class RecommendationEngine:
                 )[0]
                 recs.append(
                     Recommendation(
-                        title=f"Diversify card types (currently {max_type_ratio:.0%} {dominant_type})",
+                        title=(
+                            f"Diversify card types "
+                            f"(currently {max_type_ratio:.0%} {dominant_type})"
+                        ),
                         impact="medium",
                         effort="moderate",
                         priority_score=0.0,
@@ -212,7 +213,10 @@ class RecommendationEngine:
         if struggling_with_issues:
             recs.append(
                 Recommendation(
-                    title=f"Fix {len(struggling_with_issues)} cards with both quality and performance issues",
+                    title=(
+                        f"Fix {len(struggling_with_issues)} cards with both "
+                        "quality and performance issues"
+                    ),
                     impact="high",
                     effort="quick",
                     priority_score=0.0,
@@ -230,9 +234,10 @@ class RecommendationEngine:
             )
 
         # If low retention correlates with high warning count
-        if performance_report.retention_rate < 0.8 and quality_report.issues_by_severity.get(
-            "warning", 0
-        ) > 10:
+        if (
+            performance_report.retention_rate < 0.8
+            and quality_report.issues_by_severity.get("warning", 0) > 10
+        ):
             recs.append(
                 Recommendation(
                     title="Address quality warnings to improve retention",
@@ -276,9 +281,7 @@ class RecommendationEngine:
 
         return round(impact / effort, 2)
 
-    def format_recommendations(
-        self, recommendations: list[Recommendation], deck_name: str
-    ) -> str:
+    def format_recommendations(self, recommendations: list[Recommendation], deck_name: str) -> str:
         """Format recommendations as human-readable text.
 
         Args:
@@ -299,9 +302,7 @@ class RecommendationEngine:
 
         # Group by priority tiers
         quick_wins = [r for r in recommendations if r.priority_score >= 5.0]
-        schedule_soon = [
-            r for r in recommendations if 2.0 <= r.priority_score < 5.0
-        ]
+        schedule_soon = [r for r in recommendations if 2.0 <= r.priority_score < 5.0]
         consider = [r for r in recommendations if r.priority_score < 2.0]
 
         if quick_wins:

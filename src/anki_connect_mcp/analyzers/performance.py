@@ -1,7 +1,5 @@
 """Performance analysis for Anki decks."""
 
-from datetime import datetime, timedelta
-
 from ..client import get_anki_client
 from ..models import PerformanceReport, StrugglingCard
 
@@ -47,9 +45,7 @@ class DeckPerformanceAnalyzer:
         cards_info = await self.client.cards_info(card_ids)
 
         # Filter cards by review count
-        reviewed_cards = [
-            card for card in cards_info if card.get("reps", 0) >= min_reviews
-        ]
+        reviewed_cards = [card for card in cards_info if card.get("reps", 0) >= min_reviews]
 
         if not reviewed_cards:
             return PerformanceReport(

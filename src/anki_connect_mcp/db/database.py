@@ -281,7 +281,8 @@ class Database:
         metadata_json = json.dumps(metadata) if metadata else None
         result = self.conn.execute(
             """
-            INSERT INTO deck_analyses (deck_name, analysis_type, overall_score, total_cards, metadata)
+            INSERT INTO deck_analyses
+            (deck_name, analysis_type, overall_score, total_cards, metadata)
             VALUES (?, ?, ?, ?, ?)
             RETURNING id
             """,

@@ -196,7 +196,10 @@ async def create_cloze_card(
 
         With hints and formatting:
         >>> create_cloze_card(
-        ...     text="The {{c1::pythagorean theorem::a<sup>2</sup> + b<sup>2</sup>}} states that a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>.",
+        ...     text=(
+        ...         "The {{c1::pythagorean theorem::a<sup>2</sup> + b<sup>2</sup>}} "
+        ...         "states that a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>."
+        ...     ),
         ...     extra="<i>Named after the Greek mathematician Pythagoras</i>",
         ...     deck="Math::Geometry"
         ... )

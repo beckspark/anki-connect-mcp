@@ -24,9 +24,7 @@ class DeckQualityAnalyzer:
         self.client = get_anki_client()
         self.validator = get_validator()
 
-    async def analyze(
-        self, deck_name: str, sample_size: int | None = None
-    ) -> QualityReport:
+    async def analyze(self, deck_name: str, sample_size: int | None = None) -> QualityReport:
         """Analyze deck quality.
 
         Args:
@@ -76,8 +74,7 @@ class DeckQualityAnalyzer:
 
                 # Track problematic cards (any errors or warnings)
                 if any(
-                    r.severity
-                    in [ValidationSeverity.ERROR, ValidationSeverity.WARNING]
+                    r.severity in [ValidationSeverity.ERROR, ValidationSeverity.WARNING]
                     for r in results
                 ):
                     problematic_card_ids.append(note["noteId"])
@@ -103,9 +100,7 @@ class DeckQualityAnalyzer:
             problematic_card_ids=problematic_card_ids,
         )
 
-    def _convert_note_to_card(
-        self, note: dict
-    ) -> BasicCard | ClozeCard | TypeInCard | None:
+    def _convert_note_to_card(self, note: dict) -> BasicCard | ClozeCard | TypeInCard | None:
         """Convert Anki note to card model for validation.
 
         Args:
@@ -139,9 +134,7 @@ class DeckQualityAnalyzer:
                 # Try to extract first two fields as front/back
                 field_values = [f.get("value", "") for f in fields.values()]
                 if len(field_values) >= 2:
-                    return BasicCard(
-                        front=field_values[0], back=field_values[1], tags=tags
-                    )
+                    return BasicCard(front=field_values[0], back=field_values[1], tags=tags)
 
         except Exception:
             # If conversion fails, skip this card
@@ -172,9 +165,7 @@ class DeckQualityAnalyzer:
 
         # Type distribution
         type_counter = Counter(n.get("modelName", "Unknown") for n in notes_info)
-        type_distribution = {
-            k: round(v / len(notes_info), 2) for k, v in type_counter.items()
-        }
+        type_distribution = {k: round(v / len(notes_info), 2) for k, v in type_counter.items()}
 
         # HTML usage detection
         html_tags = [
@@ -270,9 +261,7 @@ class DeckQualityAnalyzer:
         # Ensure score is in valid range
         return max(0.0, min(100.0, round(score, 1)))
 
-    def _group_by_severity(
-        self, validation_results: list[tuple[int, list]]
-    ) -> dict[str, int]:
+    def _group_by_severity(self, validation_results: list[tuple[int, list]]) -> dict[str, int]:
         """Group issues by severity.
 
         Args:
@@ -289,9 +278,7 @@ class DeckQualityAnalyzer:
 
         return counts
 
-    def _get_top_issues(
-        self, validation_results: list[tuple[int, list]]
-    ) -> list[tuple[str, int]]:
+    def _get_top_issues(self, validation_results: list[tuple[int, list]]) -> list[tuple[str, int]]:
         """Get top 5 most common issues.
 
         Args:

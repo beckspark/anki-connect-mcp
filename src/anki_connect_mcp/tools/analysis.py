@@ -52,9 +52,7 @@ async def analyze_deck_quality(
                 error_msg += "\n" + "\n".join(f"- {s}" for s in suggestions[:5])
             else:
                 error_msg += "\n\nUse list_decks to see all available decks."
-            return CallToolResult(
-                isError=True, content=[TextContent(type="text", text=error_msg)]
-            )
+            return CallToolResult(isError=True, content=[TextContent(type="text", text=error_msg)])
 
         # Analyze deck
         analyzer = DeckQualityAnalyzer()
@@ -150,9 +148,7 @@ async def analyze_deck_performance(
                 error_msg += "\n" + "\n".join(f"- {s}" for s in suggestions[:5])
             else:
                 error_msg += "\n\nUse list_decks to see all available decks."
-            return CallToolResult(
-                isError=True, content=[TextContent(type="text", text=error_msg)]
-            )
+            return CallToolResult(isError=True, content=[TextContent(type="text", text=error_msg)])
 
         # Analyze deck
         analyzer = DeckPerformanceAnalyzer()
@@ -243,9 +239,7 @@ async def get_deck_recommendations(
                 error_msg += "\n" + "\n".join(f"- {s}" for s in suggestions[:5])
             else:
                 error_msg += "\n\nUse list_decks to see all available decks."
-            return CallToolResult(
-                isError=True, content=[TextContent(type="text", text=error_msg)]
-            )
+            return CallToolResult(isError=True, content=[TextContent(type="text", text=error_msg)])
 
         # Validate focus_area
         if focus_area not in ["quality", "performance", "both"]:
@@ -254,7 +248,10 @@ async def get_deck_recommendations(
                 content=[
                     TextContent(
                         type="text",
-                        text=f"Invalid focus_area: '{focus_area}'. Must be 'quality', 'performance', or 'both'.",
+                        text=(
+                            f"Invalid focus_area: '{focus_area}'. "
+                            "Must be 'quality', 'performance', or 'both'."
+                        ),
                     )
                 ],
             )
@@ -273,9 +270,7 @@ async def get_deck_recommendations(
 
         # Generate recommendations
         engine = RecommendationEngine()
-        recommendations = engine.generate(
-            quality_report, performance_report, max_recommendations
-        )
+        recommendations = engine.generate(quality_report, performance_report, max_recommendations)
 
         # Save to database (store top recommendation titles as metadata)
         db = get_database()
@@ -283,8 +278,7 @@ async def get_deck_recommendations(
             "focus_area": focus_area,
             "recommendation_count": len(recommendations),
             "top_recommendations": [
-                {"title": rec.title, "priority": rec.priority_score}
-                for rec in recommendations[:5]
+                {"title": rec.title, "priority": rec.priority_score} for rec in recommendations[:5]
             ],
         }
         db.save_deck_analysis(

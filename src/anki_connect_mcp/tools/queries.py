@@ -91,7 +91,10 @@ async def search_deck_cards(
             msg += "."
 
             if tags or search_query:
-                msg += "\n\nTry removing some filters or use search_deck_cards with just the deck name."
+                msg += (
+                    "\n\nTry removing some filters or use search_deck_cards "
+                    "with just the deck name."
+                )
 
             return CallToolResult(content=[TextContent(type="text", text=msg)])
 
@@ -110,8 +113,10 @@ async def search_deck_cards(
         note_map = {note["noteId"]: note for note in notes_info}
 
         # Build response
-        showing_text = f"showing {len(card_ids)}" if total_found > limit else f"showing all {len(card_ids)}"
-        msg = f"Found {total_found} cards in deck \"{deck_name}\" ({showing_text})\n\n"
+        showing_text = (
+            f"showing {len(card_ids)}" if total_found > limit else f"showing all {len(card_ids)}"
+        )
+        msg = f'Found {total_found} cards in deck "{deck_name}" ({showing_text})\n\n'
 
         for idx, card in enumerate(cards_info, 1):
             note_id = card["note"]
@@ -294,7 +299,10 @@ async def preview_deck_patterns(
                 content=[
                     TextContent(
                         type="text",
-                        text="Sample size cannot exceed 25 cards. Please use a smaller sample size.",
+                        text=(
+                            "Sample size cannot exceed 25 cards. "
+                            "Please use a smaller sample size."
+                        ),
                     )
                 ],
             )
@@ -359,14 +367,17 @@ async def preview_deck_patterns(
                 field_value = field_data.get("value", "")
 
                 # Check for HTML
-                if any(tag in field_value for tag in ["<b>", "<i>", "<br>", "<sub>", "<sup>", "<ul>", "<ol>"]):
+                if any(
+                    tag in field_value
+                    for tag in ["<b>", "<i>", "<br>", "<sub>", "<sup>", "<ul>", "<ol>"]
+                ):
                     html_usage += 1
                     break  # Count once per note
 
                 field_lengths.append(len(field_value))
 
         # Build response
-        msg = f"Deck Analysis: \"{deck_name}\"\n"
+        msg = f'Deck Analysis: "{deck_name}"\n'
         msg += f"Total Cards: {total_cards}\n\n"
 
         # Card type distribution
