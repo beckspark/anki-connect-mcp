@@ -258,6 +258,76 @@ class Database:
             "warning_rate": round(with_warnings / total * 100, 2) if total > 0 else 0,
         }
 
+    def save_deck_analysis(
+        self,
+        deck_name: str,
+        analysis_type: str,
+        overall_score: float | None,
+        total_cards: int,
+        metadata: dict | None = None,
+    ) -> int:
+        """Save deck analysis results.
+
+        Args:
+            deck_name: Name of the analyzed deck
+            analysis_type: Type of analysis ('quality', 'performance', 'recommendations')
+            overall_score: Overall score (0-100 for quality, 0.0-1.0 for performance)
+            total_cards: Number of cards analyzed
+            metadata: Additional analysis metadata as JSON
+
+        Returns:
+            Analysis ID
+        """
+        metadata_json = json.dumps(metadata) if metadata else None
+        result = self.conn.execute(
+            """
+            INSERT INTO deck_analyses (deck_name, analysis_type, overall_score, total_cards, metadata)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            [deck_name, analysis_type, overall_score, total_cards, metadata_json],
+        ).fetchone()
+        if result is None:
+            raise RuntimeError("Failed to save deck analysis")
+        return result[0]
+
+    def get_analysis_history(self, deck_name: str, limit: int = 10) -> list[dict]:
+        """Get historical analysis runs for a deck.
+
+        Args:
+            deck_name: Name of the deck
+            limit: Maximum number of results
+
+        Returns:
+            List of analysis records ordered by date (most recent first)
+        """
+        query = """
+            SELECT
+                id,
+                deck_name,
+                analysis_type,
+                overall_score,
+                total_cards,
+                metadata,
+                analyzed_at
+            FROM deck_analyses
+            WHERE deck_name = ?
+            ORDER BY analyzed_at DESC
+            LIMIT ?
+        """
+        result = self.conn.execute(query, [deck_name, limit]).fetchall()
+
+        columns = [
+            "id",
+            "deck_name",
+            "analysis_type",
+            "overall_score",
+            "total_cards",
+            "metadata",
+            "analyzed_at",
+        ]
+        return [dict(zip(columns, row)) for row in result]
+
 
 def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     """Initialize database schema.
@@ -268,6 +338,7 @@ def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     # Create sequences for auto-incrementing IDs
     conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_generations_id START 1")
     conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_generated_cards_id START 1")
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_deck_analyses_id START 1")
 
     conn.execute(
         """
@@ -299,6 +370,20 @@ def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     """
     )
 
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS deck_analyses (
+            id BIGINT PRIMARY KEY DEFAULT nextval('seq_deck_analyses_id'),
+            deck_name TEXT NOT NULL,
+            analysis_type TEXT NOT NULL,
+            overall_score FLOAT,
+            total_cards INTEGER,
+            metadata TEXT,
+            analyzed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    )
+
     # Create indices for common queries
     conn.execute(
         """
@@ -313,6 +398,12 @@ def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_generations_source ON generations(source_path)")
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_deck_analyses_deck
+        ON deck_analyses(deck_name, analyzed_at DESC)
+        """
+    )
 
 
 # Singleton connection

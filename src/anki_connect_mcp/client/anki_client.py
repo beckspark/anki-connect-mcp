@@ -261,6 +261,20 @@ class AnkiClient:
         """
         return await self.invoke("cardsInfo", {"cards": card_ids})
 
+    async def get_reviews_of_cards(self, card_ids: list[int]) -> dict:
+        """Get review history for cards.
+
+        Args:
+            card_ids: List of card IDs
+
+        Returns:
+            Dictionary mapping card IDs to review history
+
+        Raises:
+            AnkiConnectionError: Connection failed
+        """
+        return await self.invoke("getReviewsOfCards", {"cards": card_ids})
+
     # Tag operations
     async def add_tags(self, note_ids: list[int], tags: str) -> None:
         """Add tags to notes.
