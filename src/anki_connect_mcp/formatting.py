@@ -4,8 +4,17 @@ Anki supports full HTML in card fields. These utilities provide convenient
 helpers for common formatting patterns while allowing direct HTML when needed.
 """
 
+from __future__ import annotations
+
 import html
+import json
 import re
+from pathlib import Path
+
+from pygments import highlight as _pygments_highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import get_lexer_by_name
+from pygments.util import ClassNotFound
 
 
 def bold(text: str) -> str:
@@ -332,6 +341,167 @@ def mathjax_block(latex: str) -> str:
     return f"\\[{latex}\\]"
 
 
+# ---------------------------------------------------------------------------
+# Syntax highlighting (matches "Syntax Highlighter fixed by Shige" addon)
+# ---------------------------------------------------------------------------
+
+# Dark themes list matching Shige's themes.py
+_DARK_THEMES = frozenset(
+    [
+        "monokai",
+        "github-dark",
+        "lightbulb",
+        "rrt",
+        "zenburn",
+        "nord",
+        "material",
+        "one-dark",
+        "dracula",
+        "nord-darker",
+        "gruvbox-dark",
+        "stata-dark",
+        "paraiso-dark",
+        "coffee",
+        "solarized-dark",
+        "native",
+        "inkpot",
+        "fruity",
+        "vim",
+    ]
+)
+
+_shige_config: dict[str, object] | None = None
+
+
+def _get_shige_config() -> dict[str, object]:
+    """Read Shige addon config, falling back to sensible defaults."""
+    global _shige_config
+    if _shige_config is not None:
+        return _shige_config
+
+    meta_path = Path.home() / ".local/share/Anki2/addons21/272582198/meta.json"
+    defaults: dict[str, object] = {
+        "style": "monokai",
+        "linenos": False,
+        "centerfragments": True,
+        "cssclasses": False,
+        "font-size": 15,
+    }
+
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text())
+            cfg = meta.get("config", {})
+            defaults["style"] = cfg.get("style", defaults["style"])
+            defaults["linenos"] = cfg.get("linenos", defaults["linenos"])
+            defaults["centerfragments"] = cfg.get("centerfragments", defaults["centerfragments"])
+            defaults["cssclasses"] = cfg.get("cssclasses", defaults["cssclasses"])
+            defaults["font-size"] = cfg.get("font-size", defaults["font-size"])
+        except (json.JSONDecodeError, OSError):
+            pass  # keep defaults
+
+    _shige_config = defaults
+    return _shige_config
+
+
+def _escape_anki_syntax(text: str) -> str:
+    """Escape Anki template syntax in highlighted code output.
+
+    Prevents Anki's template engine from interpreting ``{{``, ``}}``, and
+    ``::`` sequences inside code blocks.
+    """
+    text = text.replace("{{", "{<!---->{")
+    text = text.replace("}}", "}<!---->}")
+    text = text.replace("::", ":<!---->:")
+    return text
+
+
+def highlight_code(code: str, language: str = "python") -> str:
+    """Syntax-highlight a code string, producing output identical to the Shige addon.
+
+    Uses Pygments with inline styles and wraps the result in the same
+    ``<center><table>`` structure that the Shige addon produces.
+
+    Args:
+        code: Raw source code to highlight.
+        language: Pygments lexer name (e.g., "python", "sql", "javascript").
+
+    Returns:
+        HTML string with inline-styled syntax highlighting ready for Anki.
+    """
+    config = _get_shige_config()
+    style_name = str(config.get("style", "monokai"))
+    linenos = config.get("linenos", False)
+    centerfragments = config.get("centerfragments", True)
+    noclasses = not config.get("cssclasses", False)
+
+    try:
+        lexer = get_lexer_by_name(language, stripall=True)
+    except ClassNotFound:
+        lexer = get_lexer_by_name("text", stripall=True)
+
+    formatter = HtmlFormatter(
+        linenos="inline" if linenos else False,
+        noclasses=noclasses,
+        style=style_name,
+        cssstyles="padding-left:8px; padding-right:8px;",
+    )
+
+    highlighted = _pygments_highlight(code, lexer, formatter)
+
+    # Determine text color based on theme darkness (matches Shige's logic)
+    if noclasses:
+        color_style = "color:#ccc;" if style_name.lower() in _DARK_THEMES else "color:#222;"
+    else:
+        color_style = ""
+
+    font_size = config.get("font-size", 15)
+    table_style = f'style="{color_style} font-size: {font_size}px;"'
+
+    if centerfragments:
+        result = (
+            f"<center><table {table_style}><tbody><tr><td>"
+            f"{highlighted}"
+            f"</td></tr></tbody></table></center><br>"
+        )
+    else:
+        result = f"<table {table_style}><tbody><tr><td>{highlighted}</td></tr></tbody></table>"
+
+    return _escape_anki_syntax(result)
+
+
+# Regex for <pre><code class="language-X">...</code></pre> blocks
+_CODE_BLOCK_RE = re.compile(
+    r"<pre><code\s+class=\"language-(\w+)\">(.*?)</code></pre>",
+    re.DOTALL,
+)
+
+
+def highlight_code_blocks(html_content: str) -> str:
+    """Find and highlight all fenced code blocks in HTML content.
+
+    Matches ``<pre><code class="language-X">...</code></pre>`` patterns
+    (the standard way to mark code blocks in card HTML) and replaces them
+    with Pygments-highlighted output matching the Shige addon format.
+
+    Plain ``<code>`` tags (inline code) are left unchanged.
+
+    Args:
+        html_content: Card field HTML that may contain code blocks.
+
+    Returns:
+        HTML with code blocks replaced by syntax-highlighted versions.
+        Returns the input unchanged if no code blocks are found.
+    """
+
+    def _replace_match(m: re.Match[str]) -> str:
+        language = m.group(1)
+        code_text = html.unescape(m.group(2))
+        return highlight_code(code_text, language)
+
+    return _CODE_BLOCK_RE.sub(_replace_match, html_content)
+
+
 # Convenience exports for common formatting patterns
 __all__ = [
     "bold",
@@ -351,4 +521,6 @@ __all__ = [
     "get_text_length",
     "mathjax_inline",
     "mathjax_block",
+    "highlight_code",
+    "highlight_code_blocks",
 ]

@@ -7,7 +7,7 @@ from mcp.types import CallToolResult, TextContent
 from ..client import AnkiConnectionError, get_anki_client
 from ..config import settings
 from ..db import get_database
-from ..formatting import get_text_length, strip_html
+from ..formatting import get_text_length, highlight_code_blocks, strip_html
 from ..models import BasicCard, ClozeCard, TypeInCard
 from ..server import app
 
@@ -30,6 +30,11 @@ async def create_basic_card(
     - Lists: `<ul><li>item</li></ul>` or `<ol><li>item</li></ol>`
     - Line breaks: `<br>`
     - Any other standard HTML tags
+
+    **Syntax Highlighting:** Multi-line code wrapped in
+    `<pre><code class="language-X">...</code></pre>` is automatically
+    syntax-highlighted using Pygments (monokai theme, inline styles).
+    Use inline `<code>` for short expressions (not highlighted).
 
     For convenience, use the formatting module helpers or pass HTML directly as strings.
 
@@ -80,6 +85,10 @@ async def create_basic_card(
             "fields": {"Front": card.front, "Back": card.back},
             "tags": card.tags,
         }
+
+        # Auto-highlight code blocks in all fields
+        for field_name in note["fields"]:
+            note["fields"][field_name] = highlight_code_blocks(note["fields"][field_name])
 
         note_id = await client.add_note(note)
 
@@ -137,6 +146,11 @@ async def create_cloze_card(
 
     **HTML Formatting:** Cloze cards support full HTML formatting both inside and outside
     cloze deletions. You can combine cloze syntax with HTML tags seamlessly.
+
+    **Syntax Highlighting:** Multi-line code wrapped in
+    `<pre><code class="language-X">...</code></pre>` is automatically
+    syntax-highlighted using Pygments (monokai theme, inline styles).
+    Use inline `<code>` for short expressions (not highlighted).
 
     Args:
         text: Text with cloze deletions. Format: {{c1::answer}} or {{c1::answer::hint}}
@@ -207,6 +221,10 @@ async def create_cloze_card(
             "tags": card.tags,
         }
 
+        # Auto-highlight code blocks in all fields
+        for field_name in note["fields"]:
+            note["fields"][field_name] = highlight_code_blocks(note["fields"][field_name])
+
         note_id = await client.add_note(note)
 
         # Log to database
@@ -265,6 +283,11 @@ async def create_type_in_card(
     (typed answer) should typically be plain text since it's used for exact matching,
     but HTML is supported if needed.
 
+    **Syntax Highlighting:** Multi-line code wrapped in
+    `<pre><code class="language-X">...</code></pre>` is automatically
+    syntax-highlighted using Pygments (monokai theme, inline styles).
+    Use inline `<code>` for short expressions (not highlighted).
+
     Args:
         front: Question or prompt text (supports HTML)
         back: Expected typed answer (must match exactly - typically plain text)
@@ -303,6 +326,10 @@ async def create_type_in_card(
             "fields": {"Front": card.front, "Back": card.back},
             "tags": card.tags,
         }
+
+        # Auto-highlight code blocks in all fields
+        for field_name in note["fields"]:
+            note["fields"][field_name] = highlight_code_blocks(note["fields"][field_name])
 
         note_id = await client.add_note(note)
 
