@@ -143,6 +143,86 @@ async def create_deck(name: str) -> CallToolResult:
 
 
 @app.tool()
+async def delete_deck(deck_name: str) -> CallToolResult:
+    """Delete an Anki deck and all its cards permanently.
+
+    This permanently removes the deck and every card it contains from Anki.
+    This action cannot be undone. Child decks (subdecks) are also deleted.
+
+    Args:
+        deck_name: Name of the deck to delete (e.g., "Syntax Highlight Test")
+
+    Returns:
+        Success confirmation, or error message
+
+    Example:
+        >>> delete_deck("Scratch::Temp Notes")
+        Successfully deleted deck 'Scratch::Temp Notes' and all its cards.
+    """
+    try:
+        if not deck_name or not deck_name.strip():
+            return CallToolResult(
+                isError=True,
+                content=[TextContent(type="text", text="Deck name cannot be empty.")],
+            )
+
+        deck_name = deck_name.strip()
+
+        # Verify deck exists
+        client = get_anki_client()
+        existing_decks = await client.deck_names()
+
+        if deck_name not in existing_decks:
+            suggestions = [d for d in existing_decks if deck_name.lower() in d.lower()]
+            error_msg = f"Deck '{deck_name}' not found."
+
+            if suggestions:
+                error_msg += "\n\nDid you mean one of these?"
+                error_msg += "\n" + "\n".join(f"- {s}" for s in suggestions[:5])
+            else:
+                error_msg += "\n\nUse list_decks to see all available decks."
+
+            return CallToolResult(isError=True, content=[TextContent(type="text", text=error_msg)])
+
+        # Refuse to delete Default deck
+        if deck_name == "Default":
+            return CallToolResult(
+                isError=True,
+                content=[TextContent(type="text", text="Cannot delete the Default deck.")],
+            )
+
+        await client.delete_decks([deck_name], cards_too=True)
+
+        return CallToolResult(
+            content=[
+                TextContent(
+                    type="text", text=f"Successfully deleted deck '{deck_name}' and all its cards."
+                )
+            ]
+        )
+
+    except AnkiConnectionError as e:
+        return CallToolResult(
+            isError=True,
+            content=[
+                TextContent(
+                    type="text",
+                    text=(
+                        "Failed to connect to Anki. "
+                        "Is Anki running with AnkiConnect installed?\n\n"
+                        f"Error: {str(e)}"
+                    ),
+                )
+            ],
+        )
+    except Exception as e:
+        return CallToolResult(
+            isError=True,
+            content=[TextContent(type="text", text=f"Unexpected error: {str(e)}")],
+        )
+
+
+@app.tool()
 async def get_deck_stats(deck_name: str) -> CallToolResult:
     """Get statistics for an Anki deck.
 
