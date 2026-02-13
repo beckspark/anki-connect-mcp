@@ -336,6 +336,18 @@ class AnkiClient:
             return info[0].get("tags", [])
         return []
 
+    async def delete_notes(self, note_ids: list[int]) -> None:
+        """Delete notes from Anki.
+
+        Args:
+            note_ids: List of note IDs to delete
+
+        Raises:
+            AnkiConnectionError: Connection failed
+            AnkiAPIError: Delete failed
+        """
+        await self.invoke("deleteNotes", {"notes": note_ids})
+
 
 # Singleton instance
 _client: AnkiClient | None = None

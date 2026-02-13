@@ -329,6 +329,284 @@ class Database:
         ]
         return [dict(zip(columns, row)) for row in result]
 
+    # ========== LLM Memory Methods ==========
+
+    def create_or_get_concept(
+        self,
+        deck: str,
+        name: str,
+        description: str | None = None,
+        parent_concept_id: int | None = None,
+    ) -> int:
+        """Create a concept or return existing concept ID.
+
+        Args:
+            deck: Deck this concept belongs to
+            name: Concept name
+            description: Optional description
+            parent_concept_id: Optional parent concept for hierarchy
+
+        Returns:
+            Concept ID (existing or newly created)
+        """
+        # Check if concept already exists
+        existing = self.conn.execute(
+            "SELECT id FROM concepts WHERE deck = ? AND name = ?", [deck, name]
+        ).fetchone()
+
+        if existing:
+            return existing[0]
+
+        # Create new concept
+        result = self.conn.execute(
+            """
+            INSERT INTO concepts (deck, name, description, parent_concept_id)
+            VALUES (?, ?, ?, ?)
+            RETURNING id
+            """,
+            [deck, name, description, parent_concept_id],
+        ).fetchone()
+        if result is None:
+            raise RuntimeError("Failed to create concept")
+        return result[0]
+
+    def link_card_to_concept(
+        self, anki_note_id: int, concept_id: int, relationship: str | None = None
+    ) -> None:
+        """Link an Anki card to a concept.
+
+        Args:
+            anki_note_id: Anki note ID
+            concept_id: Concept ID
+            relationship: Type of relationship (e.g., 'defines', 'examples', 'contrasts')
+        """
+        # Use INSERT OR REPLACE to handle duplicates
+        self.conn.execute(
+            """
+            INSERT OR REPLACE INTO card_concepts (anki_note_id, concept_id, relationship)
+            VALUES (?, ?, ?)
+            """,
+            [anki_note_id, concept_id, relationship],
+        )
+
+    def get_concept_coverage(self, deck: str) -> list[dict]:
+        """Get concepts and their card coverage for a deck.
+
+        Args:
+            deck: Deck name
+
+        Returns:
+            List of concepts with card counts
+        """
+        query = """
+            SELECT
+                c.id,
+                c.name,
+                c.description,
+                c.parent_concept_id,
+                COUNT(cc.anki_note_id) as card_count
+            FROM concepts c
+            LEFT JOIN card_concepts cc ON c.id = cc.concept_id
+            WHERE c.deck = ?
+            GROUP BY c.id, c.name, c.description, c.parent_concept_id
+            ORDER BY c.name
+        """
+        result = self.conn.execute(query, [deck]).fetchall()
+
+        columns = ["id", "name", "description", "parent_concept_id", "card_count"]
+        return [dict(zip(columns, row)) for row in result]
+
+    def store_card_rationale(
+        self,
+        anki_note_id: int,
+        card_type_reasoning: str | None = None,
+        wording_notes: str | None = None,
+        alternatives_considered: str | None = None,
+    ) -> int:
+        """Store reasoning for card design decisions.
+
+        Args:
+            anki_note_id: Anki note ID
+            card_type_reasoning: Why this card type was chosen
+            wording_notes: Notes about wording decisions
+            alternatives_considered: JSON string of alternatives that were considered
+
+        Returns:
+            Rationale record ID
+        """
+        result = self.conn.execute(
+            """
+            INSERT INTO card_rationale
+            (anki_note_id, card_type_reasoning, wording_notes, alternatives_considered)
+            VALUES (?, ?, ?, ?)
+            RETURNING id
+            """,
+            [anki_note_id, card_type_reasoning, wording_notes, alternatives_considered],
+        ).fetchone()
+        if result is None:
+            raise RuntimeError("Failed to store card rationale")
+        return result[0]
+
+    def get_card_rationale(self, anki_note_id: int) -> dict | None:
+        """Get stored rationale for a card.
+
+        Args:
+            anki_note_id: Anki note ID
+
+        Returns:
+            Rationale record or None
+        """
+        query = """
+            SELECT
+                id, anki_note_id, card_type_reasoning,
+                wording_notes, alternatives_considered, created_at
+            FROM card_rationale
+            WHERE anki_note_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """
+        result = self.conn.execute(query, [anki_note_id]).fetchone()
+        if not result:
+            return None
+
+        columns = [
+            "id",
+            "anki_note_id",
+            "card_type_reasoning",
+            "wording_notes",
+            "alternatives_considered",
+            "created_at",
+        ]
+        return dict(zip(columns, result))
+
+    def record_feedback(
+        self,
+        anki_note_id: int,
+        feedback_type: str,
+        user_comment: str | None = None,
+        llm_reflection: str | None = None,
+        action_taken: str | None = None,
+    ) -> int:
+        """Record user feedback and LLM reflection.
+
+        Args:
+            anki_note_id: Anki note ID
+            feedback_type: Type of feedback (e.g., 'confusing', 'too_hard', 'great')
+            user_comment: User's comment
+            llm_reflection: LLM's analysis of the feedback
+            action_taken: What action was taken in response
+
+        Returns:
+            Feedback record ID
+        """
+        result = self.conn.execute(
+            """
+            INSERT INTO card_feedback
+            (anki_note_id, feedback_type, user_comment, llm_reflection, action_taken)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            [anki_note_id, feedback_type, user_comment, llm_reflection, action_taken],
+        ).fetchone()
+        if result is None:
+            raise RuntimeError("Failed to record feedback")
+        return result[0]
+
+    def get_card_feedback(self, anki_note_id: int) -> list[dict]:
+        """Get all feedback for a card.
+
+        Args:
+            anki_note_id: Anki note ID
+
+        Returns:
+            List of feedback records
+        """
+        query = """
+            SELECT
+                id, anki_note_id, feedback_type, user_comment,
+                llm_reflection, action_taken, created_at
+            FROM card_feedback
+            WHERE anki_note_id = ?
+            ORDER BY created_at DESC
+        """
+        result = self.conn.execute(query, [anki_note_id]).fetchall()
+
+        columns = [
+            "id",
+            "anki_note_id",
+            "feedback_type",
+            "user_comment",
+            "llm_reflection",
+            "action_taken",
+            "created_at",
+        ]
+        return [dict(zip(columns, row)) for row in result]
+
+    def save_session_context(
+        self,
+        deck: str,
+        source_material: str | None = None,
+        learning_goals: str | None = None,
+        coverage_strategy: str | None = None,
+        observations: str | None = None,
+    ) -> int:
+        """Save session context for future continuity.
+
+        Args:
+            deck: Deck name
+            source_material: What source material was used
+            learning_goals: User's stated learning goals
+            coverage_strategy: LLM's planned coverage strategy
+            observations: Patterns or insights noticed
+
+        Returns:
+            Session ID
+        """
+        result = self.conn.execute(
+            """
+            INSERT INTO sessions
+            (deck, source_material, learning_goals, coverage_strategy, observations)
+            VALUES (?, ?, ?, ?, ?)
+            RETURNING id
+            """,
+            [deck, source_material, learning_goals, coverage_strategy, observations],
+        ).fetchone()
+        if result is None:
+            raise RuntimeError("Failed to save session context")
+        return result[0]
+
+    def get_session_context(self, deck: str, limit: int = 5) -> list[dict]:
+        """Get recent session context for a deck.
+
+        Args:
+            deck: Deck name
+            limit: Maximum number of sessions to return
+
+        Returns:
+            List of session records (most recent first)
+        """
+        query = """
+            SELECT
+                id, deck, source_material, learning_goals,
+                coverage_strategy, observations, created_at
+            FROM sessions
+            WHERE deck = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """
+        result = self.conn.execute(query, [deck, limit]).fetchall()
+
+        columns = [
+            "id",
+            "deck",
+            "source_material",
+            "learning_goals",
+            "coverage_strategy",
+            "observations",
+            "created_at",
+        ]
+        return [dict(zip(columns, row)) for row in result]
+
 
 def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     """Initialize database schema.
@@ -340,6 +618,10 @@ def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_generations_id START 1")
     conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_generated_cards_id START 1")
     conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_deck_analyses_id START 1")
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_concepts_id START 1")
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_card_rationale_id START 1")
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_card_feedback_id START 1")
+    conn.execute("CREATE SEQUENCE IF NOT EXISTS seq_sessions_id START 1")
 
     conn.execute(
         """
@@ -385,6 +667,81 @@ def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     """
     )
 
+    # LLM Memory Tables - for concept coverage and reasoning storage
+
+    # Concepts: What concepts exist and their relationships
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS concepts (
+            id BIGINT PRIMARY KEY DEFAULT nextval('seq_concepts_id'),
+            deck TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT,
+            parent_concept_id BIGINT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (parent_concept_id) REFERENCES concepts(id)
+        )
+    """
+    )
+
+    # Card-Concept links: Which cards cover which concepts (many-to-many)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS card_concepts (
+            anki_note_id BIGINT NOT NULL,
+            concept_id BIGINT NOT NULL,
+            relationship TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (anki_note_id, concept_id),
+            FOREIGN KEY (concept_id) REFERENCES concepts(id)
+        )
+    """
+    )
+
+    # Card Rationale: Store LLM reasoning for card design decisions
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS card_rationale (
+            id BIGINT PRIMARY KEY DEFAULT nextval('seq_card_rationale_id'),
+            anki_note_id BIGINT NOT NULL,
+            card_type_reasoning TEXT,
+            wording_notes TEXT,
+            alternatives_considered TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    )
+
+    # Card Feedback: User feedback and LLM reflection for learning
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS card_feedback (
+            id BIGINT PRIMARY KEY DEFAULT nextval('seq_card_feedback_id'),
+            anki_note_id BIGINT NOT NULL,
+            feedback_type TEXT NOT NULL,
+            user_comment TEXT,
+            llm_reflection TEXT,
+            action_taken TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    )
+
+    # Sessions: Context for continuity across conversations
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sessions (
+            id BIGINT PRIMARY KEY DEFAULT nextval('seq_sessions_id'),
+            deck TEXT NOT NULL,
+            source_material TEXT,
+            learning_goals TEXT,
+            coverage_strategy TEXT,
+            observations TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """
+    )
+
     # Create indices for common queries
     conn.execute(
         """
@@ -405,6 +762,15 @@ def _init_schema(conn: duckdb.DuckDBPyConnection) -> None:
         ON deck_analyses(deck_name, analyzed_at DESC)
         """
     )
+
+    # LLM Memory indices
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_concepts_deck ON concepts(deck)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_card_concepts_note ON card_concepts(anki_note_id)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_card_rationale_note ON card_rationale(anki_note_id)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_card_feedback_note ON card_feedback(anki_note_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_deck ON sessions(deck, created_at DESC)")
 
 
 # Singleton connection
